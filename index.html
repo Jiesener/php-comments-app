@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>复制评论</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.container{background:#fff;padding:40px;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-width:500px;width:100%;text-align:center}
+h1{color:#333;margin-bottom:30px;font-size:24px}
+.badge{display:inline-block;background:rgba(102,126,234,.12);color:#667eea;font-size:13px;padding:4px 14px;border-radius:20px;margin-bottom:20px;font-weight:600}
+textarea{width:100%;height:150px;padding:15px;border:2px solid #e0e0e0;border-radius:10px;font-size:16px;resize:none;margin-bottom:20px;font-family:inherit}
+textarea:focus{outline:none;border-color:#667eea}
+button{width:100%;padding:15px 30px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;border:none;border-radius:10px;font-size:18px;cursor:pointer;transition:transform .2s,box-shadow .2s}
+button:hover{transform:translateY(-2px);box-shadow:0 5px 20px rgba(102,126,234,.4)}
+button:active{transform:translateY(0)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.empty{color:#999;font-size:16px;padding:40px 0}
+.success{color:#27ae60;font-weight:bold;margin-top:15px;display:none}
+.nav{margin-top:20px}
+.nav a{color:#666;text-decoration:none;font-size:14px}
+.nav a:hover{color:#333}
+.loading{color:#667eea;font-size:16px;padding:40px 0}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>📋 复制评论</h1>
+<div class="badge">📌 剩余 <strong id="count">-</strong> 条</div>
+<div id="content"><div class="loading">⏳ 加载中...</div></div>
+<div class="success" id="successMsg">✅ 已复制到剪贴板！</div>
+<div class="nav"><a href="submit.html">去提交内容 →</a></div>
+</div>
+
+<script>
+// JSONBin 配置
+var AK='$2a$10$mN/qxmnMyWObfCIw7cZokuvM1jSfeZ7u1zLt8yqTLlaMztS3hsvqm';
+var BIN='6a4490d2da38895dfe198314';
+
+function load(){return fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:{'X-Master-Key':AK}}).then(function(r){return r.json()}).then(function(d){return(d.record||{}).comments||[]}).catch(function(){return null})}
+function save(arr){return fetch('https://api.jsonbin.io/v3/b/'+BIN,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':AK},body:JSON.stringify({comments:arr})}).then(function(){return true}).catch(function(){return false})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+
+var CUR=null,BUSY=false;
+
+function render(r){
+  document.getElementById('count').textContent=r||0;
+  var el=document.getElementById('content');
+  if(!CUR){el.innerHTML='<div class="empty"><p>📭 当前没有内容了</p><p style="margin-top:10px;font-size:14px">请先提交新内容</p></div>';return}
+  el.innerHTML='<textarea id="ta" readonly>'+esc(CUR)+'</textarea><button id="btn" onclick="copy()">📋 复制内容</button>';
+}
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+
+async function pick(){
+  for(var i=0;i<20;i++){
+    var arr=await load();
+    if(arr===null){await sleep(300);continue}
+    if(arr.length===0){CUR=null;render(0);return}
+    var idx=Math.floor(Math.random()*arr.length);
+    var picked=arr[idx];
+    arr.splice(idx,1);
+    if(await save(arr)){CUR=picked;render(arr.length);return}
+    await sleep(100);
+  }
+  CUR=null;render(0);
+}
+
+function copy(){
+  if(BUSY||!CUR)return;
+  BUSY=true;
+  var btn=document.getElementById('btn');
+  if(btn)btn.disabled=true;
+  var text=CUR;
+  var onSuccess=function(){var m=document.getElementById('successMsg');m.style.display='block';setTimeout(function(){m.style.display='none'},2000);BUSY=false;setTimeout(function(){pick()},300)};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(onSuccess).catch(function(){fbCopy(text,onSuccess)})}
+  else{fbCopy(text,onSuccess)}
+}
+function fbCopy(text,onOk){var ta=document.getElementById('ta');if(ta){ta.select();ta.setSelectionRange(0,99999);document.execCommand('copy');onOk()}}
+
+pick();
+</script>
+</body>
+</html>
