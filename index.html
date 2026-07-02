@@ -42,7 +42,7 @@ function load(){return fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{heade
 function save(arr){return fetch('https://api.jsonbin.io/v3/b/'+BIN,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':AK},body:JSON.stringify({comments:arr})}).then(function(){return true}).catch(function(){return false})}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 
-var CUR=null,BUSY=false;
+var CUR=null,BUSY=false,IDX=-1;
 
 function render(r){
   document.getElementById('count').textContent=r||0;
@@ -52,31 +52,58 @@ function render(r){
 }
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 
+// 加载并随机选一条显示（不删除）
 async function pick(){
   for(var i=0;i<20;i++){
     var arr=await load();
     if(arr===null){await sleep(300);continue}
-    if(arr.length===0){CUR=null;render(0);return}
+    if(arr.length===0){CUR=null;IDX=-1;render(0);return}
     var idx=Math.floor(Math.random()*arr.length);
-    var picked=arr[idx];
-    arr.splice(idx,1);
-    if(await save(arr)){CUR=picked;render(arr.length);return}
-    await sleep(100);
+    CUR=arr[idx];
+    IDX=idx;
+    render(arr.length);
+    return;
   }
-  CUR=null;render(0);
+  CUR=null;IDX=-1;render(0);
 }
 
-function copy(){
+// 复制后才删除
+async function copy(){
   if(BUSY||!CUR)return;
   BUSY=true;
   var btn=document.getElementById('btn');
   if(btn)btn.disabled=true;
   var text=CUR;
-  var onSuccess=function(){var m=document.getElementById('successMsg');m.style.display='block';setTimeout(function(){m.style.display='none'},2000);BUSY=false;setTimeout(function(){pick()},300)};
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(onSuccess).catch(function(){fbCopy(text,onSuccess)})}
-  else{fbCopy(text,onSuccess)}
+
+  // 先复制到剪贴板
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+    }else{
+      var ta=document.getElementById('ta');
+      if(ta){ta.select();ta.setSelectionRange(0,99999);document.execCommand('copy')}
+    }
+    var m=document.getElementById('successMsg');
+    m.style.display='block';
+    setTimeout(function(){m.style.display='none'},2000);
+  }catch(e){
+    BUSY=false;
+    if(btn)btn.disabled=false;
+    return;
+  }
+
+  // 复制成功后，从数据库删除这条评论
+  var arr=await load();
+  if(arr&&IDX>=0&&IDX<arr.length&&arr[IDX]===CUR){
+    arr.splice(IDX,1);
+    await save(arr);
+  }
+
+  BUSY=false;
+  CUR=null;IDX=-1;
+  // 删除后重新加载显示下一条
+  setTimeout(function(){pick()},300);
 }
-function fbCopy(text,onOk){var ta=document.getElementById('ta');if(ta){ta.select();ta.setSelectionRange(0,99999);document.execCommand('copy');onOk()}}
 
 pick();
 </script>
